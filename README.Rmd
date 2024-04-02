@@ -1,0 +1,137 @@
+---
+title: "Gasperini (2019) data documentation"
+author: "Tim Barry"
+date: '2022-07-04'
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(ondisc)
+```
+
+# Overview
+
+This repository contains code to import and process the [Gasperini 2019](https://pubmed.ncbi.nlm.nih.gov/30612741/) data. Gasperini et al. developed a high MOI, single-cell CRISPR screen assay to map putative enhancers at genome-wide scale in a population of \>200,000 K562 cells.
+
+The `gasperini-2019-v2` directory structure is as follows:
+
+    └── at-scale
+        ├── intermediate
+        ├── processed
+        │   ├── gene
+        │   │   ├── matrix.odm
+        │   │   └── metadata.rds
+        │   ├── grna_assignment
+        │   │   ├── matrix.odm
+        │   │   └── metadata.rds
+        │   └── grna_expression
+        │       ├── matrix.odm
+        │       └── metadata.rds
+        └── raw
+
+The contents of the `raw` and `intermediate` directories are suppressed, as they are unimportant. We set file paths to the `gene`, `grna_assignment`, and `grna_expression` modalities of the `processed` directory below.
+
+```{r}
+gasp_offsite <- paste0(.get_config_path("LOCAL_GASPERINI_2019_V2_DATA_DIR"), "at-scale/")
+processed_data_dir <- paste0(gasp_offsite, "processed/")
+processed_gene_dir <- paste0(processed_data_dir, "gene/")
+processed_gRNA_expression_dir <- paste0(processed_data_dir, "grna_expression/")
+processed_gRNA_assignment_dir <- paste0(processed_data_dir, "grna_assignment/")
+```
+
+# Gene
+
+```{r}
+gene_odm <- read_odm(paste0(processed_gene_dir, "matrix.odm"),
+                     paste0(processed_gene_dir, "metadata.rds"))
+gene_odm
+```
+
+The gene data consist of 13,135 genes measured across 207,324 cells. The cell covariates include `n_nonzero` (number of genes expressed in cell), `n_umis` (cell sequencing depth or library size), `p_mito`, and `batch`. There are two batches: `prep_batch_1` and `prep_batch_2`.
+
+```{r}
+gene_odm |> get_cell_covariates() |> head()
+```
+
+# gRNA (expression)
+
+The gRNA (expression) modality contains data on 13,189 gRNAs and 207,324 cells.
+
+```{r}
+gRNA_expression_odm <- read_odm(paste0(processed_gRNA_expression_dir, "matrix.odm"),
+                                paste0(processed_gRNA_expression_dir, "metadata.rds"))
+gRNA_expression_odm
+```
+
+The cell covariate matrix contains columns `n_nonzero` and `n_umis`. The feature covariate matrix, meanwhile, is a bit more complicated. Let us take a look.
+
+```{r}
+gRNA_expression_odm |> get_feature_covariates() |> head()
+```
+
+The column `target_type` indicates the target type of a given gRNA, one of `candidate_enhancer`, `non-targeting`, `known_enhancer`, and `gene_tss`.
+
+```{r}
+gRNA_expression_odm |>
+  get_feature_covariates() |>
+  pull(target_type) |> table()
+```
+
+`candidate_enhancer` indicates a region of the genome that is a putative enhancer; `non-targeting` indicates a non-targeting gRNA; `known_enhancer` indicates a region of the genome that is known to be an enhancer (based on previous research); and `gene_tss` is the transcription start site of a gene.
+
+Next, the `target` column indicates the chromosomal region that a given gRNA targets:
+
+```{r}
+target_str <- gRNA_expression_odm |>
+  get_feature_covariates() |>
+  pull(target)
+```
+
+Most chromosomal locations are targeted by two or four gRNAs. Non-targeting gRNAs have the string "non-targeting" in the `target` column:
+
+```{r}
+gRNA_expression_odm |>
+  get_feature_covariates() |>
+  filter(target_type == "non-targeting") |> head()
+```
+
+Next, `target_gene` indicates the gene targeted by TSS-targeting (i.e., type `gene_tss`) gRNAs. gRNAs that do not target gene TSSs have an `<NA>` in this column.
+
+```{r}
+# tss-targeting gRNAs
+gRNA_expression_odm |>
+  get_feature_covariates() |>
+  filter(target_type == "gene_tss") |> head()
+
+# all other gRNAs
+gRNA_expression_odm |>
+  get_feature_covariates() |>
+  filter(target_type != "gene_tss") |> head()
+```
+
+Finally, `gRNA_group` contains the group to which each gRNA belongs, *as defined by the original authors*. Negative control gRNAs are grouped into pairs (with the exception of group "bassik_mch", which contains only a single gRNA).
+
+```{r}
+gRNA_expression_odm |>
+  get_feature_covariates() |>
+  filter(target_type == "non-targeting") |> 
+  pull(gRNA_group) |>
+  table()
+```
+
+# gRNA assignment
+
+Finally, the gRNA assignment modality is a thresholded version of the gRNA expression modality. The threshold used was 5 gRNA UMIs/cell, same as in the original study.
+
+```{r}
+gRNA_assignment_odm <- read_odm(paste0(processed_gRNA_assignment_dir, "matrix.odm"),
+                                paste0(processed_gRNA_assignment_dir, "metadata.rds"))
+gRNA_assignment_odm
+```
+
+The feature covariates of the gRNA assignment ODM coincide with those of the gRNA expression ODM. The cell covariates, by contrast, are `n_nonzero`.
