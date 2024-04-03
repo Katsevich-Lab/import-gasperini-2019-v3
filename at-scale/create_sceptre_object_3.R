@@ -13,8 +13,8 @@ if (!dir.exists(processed_data_dir)) dir.create(path = processed_data_dir, recur
 monocle_obj <- readRDS(paste0(raw_data_dir, "/GSE120861_at_scale_screen.cds.rds"))
 cell_metadata <- pData(monocle_obj)
 gene_expression_matrix <- exprs(monocle_obj)
-grna_expression_matrix <- readRDS(paste0(intermediate_data_dir, "grna_count_matrix.rds"))
-grna_feature_covariates <- readRDS(paste0(intermediate_data_dir, "grna_feature_covariates.rds"))
+grna_expression_matrix <- readRDS(paste0(intermediate_data_dir, "gRNA_count_matrix.rds"))
+grna_feature_covariate_df <- readRDS(paste0(intermediate_data_dir, "gRNA_feature_covariates.rds"))
 
 rm(monocle_obj)
 
@@ -22,7 +22,7 @@ rm(monocle_obj)
 grna_expression_matrix <- grna_expression_matrix[grna_feature_covariate_df$barcode,]
 
 # construct grna_target_data_frame
-grna_target_data_frame <- grna_feature_covariates |>
+grna_target_data_frame <- grna_feature_covariate_df |>
   dplyr::mutate(grna_id = barcode,
                 grna_target = if_else(!is.na(target_gene), target_gene, target)) |>
   dplyr::select(grna_id, grna_target)
@@ -38,3 +38,9 @@ sceptre_object <- import_data(response_matrix = gene_expression_matrix,
                               extra_covariates = extra_covariates,
                               use_ondisc = TRUE, 
                               directory = processed_data_dir)
+
+# write sceptre_object to disk
+write_ondisc_backed_sceptre_object(
+  sceptre_object = sceptre_object,
+  directory_to_write = directory_to_write
+)
