@@ -39,6 +39,10 @@ grna_target_data_frame <- grna_feature_covariate_df |>
                 chr = target_site.chr,
                 start = target_site.start,
                 end = target_site.stop) |>
+  dplyr::mutate(chr = if_else(grna_target == "non-targeting", NA_character_, chr),
+                start = if_else(grna_target == "non-targeting", NA_character_, start),
+                end = if_else(grna_target == "non-targeting", NA_character_, end)) |>
+  dplyr::mutate(start = as.integer(start), end = as.integer(end)) |>
   dplyr::select(grna_id, grna_target, chr, start, end)
 
 # extract extra covariates
